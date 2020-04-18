@@ -1,3 +1,4 @@
+#! /usr/bin/python
 
 import xxhash
 import zlib
@@ -9,6 +10,12 @@ import sys
 ***FILE FORMAT***
 [HEADER**COUNT,HASH_OFFSET,BLOCK_OFFSET**HASH..HASH**BLOCK..BLOCK**FILE..FILE**HEADER]
 '''
+
+def savePath(path):
+    if os.path.isfile(path):
+        return os.path.abspath(os.path.dir(path)) + "/pkg.bin"
+    elif os.path.isdir(path):
+        return os.path.abspath(path) + ".bin"
 
 def baseDir(path):
     if os.path.isfile(path):
@@ -32,7 +39,9 @@ def packFileBlock(path):
     target = open(path, "r")
     content = target.read()
     compressed = zlib.compress(content)
+    print("========================>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
     print("compressed length:%d" % len(compressed))
+    print("%d ===> %d" % (len(compressed), len(content)))
     target.close()
     return struct.pack("=BL%ds0c" % len(compressed), 1, len(content), compressed)
 
@@ -70,24 +79,30 @@ if __name__ == "__main__":
         relatedPaths = [(path.replace(root + "/", "")) for path in files]
         print("related path:")
         print(relatedPaths)
+        # 
         hashs = [(xxhash.xxh32(path, seed=0).intdigest()) for path in relatedPaths]
         print("hashs:")
         print(hashs)
         # gen file
-        binPath = os.getcwd() + "/data.pkg"
+        binPath = savePath(realPath)
+        print("save to :" + binPath)
         if os.path.exists(binPath):
             os.remove(binPath)
         binFile = open(binPath, "wb+")
         # calculate offset
         hashOffset = 3 + 4 + 4 + 4
-        blockOffset = hashOffset + 4 * count
-        fileOffset = blockOffset + 8 * count
+        blockOffset = hashOffset + 4 * count    # 4 bit: file xxhash value
+        fileOffset = blockOffset + 8 * count    # 8 bit: prefix 4 bit is file buffer begin, after 4 bit is file buffer length
         blocks = []
         # write file begin
         writeHeader(binFile)
         writeUInt32(binFile, count)
         writeUInt32(binFile, hashOffset)
         writeUInt32(binFile, blockOffset)
+        print("count:{}".format(count))
+        print("hashOffset:{}".format(hashOffset))
+        print("blockOffset:{}".format(blockOffset))
+
         # write hash
         for h in hashs:
             writeUInt32(binFile, h)
@@ -97,7 +112,7 @@ if __name__ == "__main__":
         for p in files:
             pack = packFileBlock(p)
             length = len(pack)
-            print("pack file:%s" % pack.encode("hex"))
+            # print("pack file:%s" % pack.encode("hex"))
             writeData(binFile, pack)
             blocks.append((filesBegin, length))
             filesBegin = filesBegin + length
